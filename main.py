@@ -1,224 +1,172 @@
 #=== Gnuee Assistant (OKX Trading Bot - Versi Real) ===
-#Semua fitur aktif dalam 1 file (Telegram + Trading)
 
-import logging
-import os
-import json
-import time
-import hmac
-import hashlib
-import base64
-import requests
-from datetime import datetime
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import (
-    ApplicationBuilder,
-    CommandHandler,
-    MessageHandler,
-    CallbackQueryHandler,
-    ContextTypes,
-    filters,
-)
-from dotenv import load_dotenv
-import asyncio
+Semua fitur aktif dalam 1 file (Telegram + Trading + Auto + Manual + Log + Setting)
 
-# === INIT ===
-load_dotenv()
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-USER_DB = "user_data.json"
+import logging import os import json import time import hmac import hashlib import base64 import requests from datetime import datetime from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters from dotenv import load_dotenv import asyncio
 
-logging.basicConfig(level=logging.INFO)
+=== INIT ===
 
-user_states = {}      # track input step
-user_temp = {}        # temporary storage during input
-active_auto = {}      # track who is in auto trading mode
+load_dotenv() BOT_TOKEN = os.getenv("BOT_TOKEN") USER_DB = "user_data.json" logging.basicConfig(level=logging.INFO)
 
-DEFAULT_SETTINGS = {
-    "pair": "BTC-USDT-SWAP",
-    "tp": 1.5,
-    "sl": 0.8,
-    "leverage": 10,
-    "trailing": 0.5,
-    "margin": 10,
-}
+user_states = {} user_temp = {} active_auto = {} active_positions = {} DEFAULT_SETTINGS = {"pair": "BTC-USDT-SWAP", "tp": 1.5, "sl": 0.8, "leverage": 10, "trailing": 0.5, "margin": 10, "log": []}
 
-# === DATA HANDLING ===
-def load_data():
-    if not os.path.exists(USER_DB):
-        with open(USER_DB, 'w') as f:
-            json.dump({}, f)
-    with open(USER_DB) as f:
-        return json.load(f)
+=== DATA ===
 
-def save_data(data):
-    with open(USER_DB, 'w') as f:
-        json.dump(data, f, indent=2)
+def load_data(): if not os.path.exists(USER_DB): with open(USER_DB, 'w') as f: json.dump({}, f) with open(USER_DB) as f: return json.load(f)
 
-# === OKX API HEADER GENERATION ===
-def okx_headers(api_key, api_secret, passphrase):
-    ts = datetime.utcnow().isoformat("T", "milliseconds") + "Z"
-    msg = ts + "GET" + "/api/v5/account/balance"
-    sign = base64.b64encode(hmac.new(api_secret.encode(), msg.encode(), hashlib.sha256).digest()).decode()
-    return {
-        "OK-ACCESS-KEY": api_key,
-        "OK-ACCESS-SIGN": sign,
-        "OK-ACCESS-TIMESTAMP": ts,
-        "OK-ACCESS-PASSPHRASE": passphrase,
-        "Content-Type": "application/json",
-    }
+def save_data(data): with open(USER_DB, 'w') as f: json.dump(data, f, indent=2)
 
-# === GET BALANCE FROM OKX ===
-def get_balance(user):
-    try:
-        url = "https://www.okx.com/api/v5/account/balance"
-        headers = okx_headers(user['api_key'], user['api_secret'], user['passphrase'])
-        res = requests.get(url, headers=headers)
-        if res.status_code == 200:
-            data = res.json()['data'][0]['details']
-            usdt = next((a['availBal'] for a in data if a['ccy'] == 'USDT'), "0")
-            return float(usdt)
-    except Exception:
-        pass
-    return -1
+=== OKX ===
 
-# === MOCK ENTRY ORDER (SIMULASI) ===
-def entry_order(user, side):
-    pair = user['pair']
-    margin = user['margin']
-    lev = user['leverage']
-    return f"🟢 Order {side.upper()} {pair}\nMargin: {margin} USDT | Leverage: {lev}x"
+def okx_headers(api_key, api_secret, passphrase): ts = datetime.utcnow().isoformat("T", "milliseconds") + "Z" msg = ts + "GET" + "/api/v5/account/balance" sign = base64.b64encode(hmac.new(api_secret.encode(), msg.encode(), hashlib.sha256).digest()).decode() return { "OK-ACCESS-KEY": api_key, "OK-ACCESS-SIGN": sign, "OK-ACCESS-TIMESTAMP": ts, "OK-ACCESS-PASSPHRASE": passphrase, "Content-Type": "application/json" }
 
-# === AUTO TRADING LOOP (SIMULASI) ===
-async def auto_loop(context: ContextTypes.DEFAULT_TYPE, user_id):
-    data = load_data()
-    user = data.get(str(user_id), None)
-    if not user:
-        await context.bot.send_message(user_id, "❗ API belum terhubung, auto trading tidak dapat dijalankan.")
-        return
+def get_balance(user): try: url = "https://www.okx.com/api/v5/account/balance" headers = okx_headers(user['api_key'], user['api_secret'], user['passphrase']) res = requests.get(url, headers=headers) if res.status_code == 200: data = res.json()['data'][0]['details'] usdt = next((a['availBal'] for a in data if a['ccy'] == 'USDT'), "0") return float(usdt) except: return -1
 
-    for i in range(3):  # simulasi scan market 3 kali
-        if not active_auto.get(user_id, False):
-            break
-        await context.bot.send_message(user_id, f"📡 Scan market ke-{i + 1}... (pair {user['pair']})")
-        await asyncio.sleep(2)
+def fetch_usdt_swap_pairs(): try: url = "https://www.okx.com/api/v5/public/instruments?instType=SWAP" res = requests.get(url) all_pairs = res.json()['data'] return [i['instId'] for i in all_pairs if i['instId'].endswith("USDT-SWAP")] except: return ["BTC-USDT-SWAP"]
 
-    if active_auto.get(user_id, False):
-        msg = entry_order(user, "buy")
-        await context.bot.send_message(user_id, msg)
+def add_log(uid, pair, pnl): data = load_data() user = data.get(str(uid), {}) logs = user.get("log", []) date = datetime.now().strftime("%Y-%m-%d") entry = f"{date} | {pair} | {'+' if pnl >= 0 else ''}{pnl:.2f} USDT" logs.append(entry) if len(logs) > 30: logs = logs[-30:] user["log"] = logs data[str(uid)] = user save_data(data)
 
-# === TELEGRAM BOT HANDLERS ===
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [
-        [InlineKeyboardButton("🔗 Hubungkan API", callback_data="set_api")],
-        [InlineKeyboardButton("📊 Menu Utama", callback_data="menu")],
-    ]
-    await update.message.reply_text("👋 Selamat datang di Gnuee Assistant!", reply_markup=InlineKeyboardMarkup(keyboard))
+=== ORDER MOCK ===
 
-async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    uid = query.from_user.id
-    data = load_data()
+def entry_order(user, side): pair = user['pair'] margin = user['margin'] lev = user['leverage'] pnl = round((margin * 0.1) if side == 'buy' else -(margin * 0.07), 2) return f"🟢 Order {side.upper()} {pair}\nMargin: {margin} USDT | Leverage: {lev}x", pnl
 
-    if query.data == "set_api":
-        user_states[uid] = "api"
-        user_temp[uid] = {}
-        await query.message.reply_text("🛠 Kirim API KEY kamu:")
+async def auto_loop(context, user_id): data = load_data() user = data[str(user_id)] pairs = fetch_usdt_swap_pairs()[:5]  # Limit scan for pair in pairs: if not active_auto.get(user_id): break await context.bot.send_message(user_id, f"📡 Scan pair {pair}...") await asyncio.sleep(2) user['pair'] = pair result, pnl = entry_order(user, "buy") await context.bot.send_message(user_id, result) add_log(user_id, pair, pnl) active_positions[user_id] = { "pair": pair, "side": "BUY", "margin": user['margin'], "lev": user['leverage'], "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S") }
 
-    elif query.data == "menu":
-        keyboard = [
-            [InlineKeyboardButton("🤖 Auto Mode", callback_data="auto")],
-            [InlineKeyboardButton("✋ Manual Mode", callback_data="manual")],
-            [InlineKeyboardButton("⏹ Stop", callback_data="stop")],
-            [InlineKeyboardButton("⚙️ Setting", callback_data="settings")],
-            [InlineKeyboardButton("💰 Saldo", callback_data="saldo")],
-            [InlineKeyboardButton("📜 Log", callback_data="log")],
-        ]
-        await query.message.reply_text("📊 Menu Utama:", reply_markup=InlineKeyboardMarkup(keyboard))
+=== TELEGRAM ===
 
-    elif query.data == "auto":
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE): keyboard = [[InlineKeyboardButton("🔗 Hubungkan API", callback_data="set_api")], [InlineKeyboardButton("📊 Menu Utama", callback_data="menu")]] await update.message.reply_text("👋 Selamat datang di Gnuee Assistant!", reply_markup=InlineKeyboardMarkup(keyboard))
+
+async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE): query = update.callback_query await query.answer() uid = query.from_user.id data = load_data() user = data.get(str(uid))
+
+if query.data == "set_api":
+    user_states[uid] = "api"
+    user_temp[uid] = {}
+    await query.message.reply_text("🛠 Kirim API KEY kamu:")
+
+elif query.data == "menu":
+    keyboard = [[InlineKeyboardButton("🤖 Auto Mode", callback_data="auto")],
+                [InlineKeyboardButton("✋ Manual Mode", callback_data="manual")],
+                [InlineKeyboardButton("📈 Posisi Aktif", callback_data="posisi")],
+                [InlineKeyboardButton("⏹ Stop", callback_data="stop")],
+                [InlineKeyboardButton("⚙️ Setting", callback_data="settings")],
+                [InlineKeyboardButton("💰 Saldo", callback_data="saldo")],
+                [InlineKeyboardButton("📜 Log", callback_data="log")]]
+    await query.message.reply_text("📊 Menu Utama:", reply_markup=InlineKeyboardMarkup(keyboard))
+
+elif query.data == "auto":
+    if user:
         active_auto[uid] = True
         await query.message.reply_text("🚀 Auto trading dimulai!")
         await auto_loop(context, uid)
-
-    elif query.data == "stop":
-        active_auto[uid] = False
-        await query.message.reply_text("🛑 Auto trading dihentikan.")
-
-    elif query.data == "manual":
-        keyboard = [
-            [InlineKeyboardButton("🟢 BUY", callback_data="buy"), InlineKeyboardButton("🔴 SELL", callback_data="sell")]
-        ]
-        await query.message.reply_text("✋ Manual Mode:", reply_markup=InlineKeyboardMarkup(keyboard))
-
-    elif query.data in ["buy", "sell"]:
-        user = data.get(str(uid))
-        if not user:
-            await query.message.reply_text("❗ Belum hubungkan API")
-            return
-        result = entry_order(user, query.data)
-        await query.message.reply_text(result)
-
-    elif query.data == "saldo":
-        user = data.get(str(uid))
-        if not user:
-            await query.message.reply_text("❗ Belum hubungkan API")
-            return
-        bal = get_balance(user)
-        if bal == -1:
-            await query.message.reply_text("⚠️ Gagal ambil saldo")
-        else:
-            await query.message.reply_text(f"💰 Saldo OKX: {bal} USDT")
-
-    elif query.data == "log":
-        await query.message.reply_text("📜 Log:\n- BUY BTC ✅ TP\n- SELL ETH ❌ SL")
-
-    elif query.data == "settings":
-        # Placeholder for future settings implementation
-        await query.message.reply_text("⚙️ Menu pengaturan belum tersedia.")
-
-async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_user.id
-    txt = update.message.text.strip()
-    msg_id = update.message.message_id
-
-    if uid in user_states:
-        step = user_states[uid]
-        if step == "api":
-            user_temp[uid]["api_key"] = txt
-            user_states[uid] = "secret"
-            await context.bot.delete_message(update.effective_chat.id, msg_id)
-            await update.message.reply_text("🔐 Kirim API SECRET kamu:")
-
-        elif step == "secret":
-            user_temp[uid]["api_secret"] = txt
-            user_states[uid] = "pass"
-            await context.bot.delete_message(update.effective_chat.id, msg_id)
-            await update.message.reply_text("🧷 Kirim API PASSPHRASE kamu:")
-
-        elif step == "pass":
-            user_temp[uid]["passphrase"] = txt
-            data = load_data()
-            # Merge user input with default settings, prioritizing user input
-            combined = {**DEFAULT_SETTINGS, **user_temp[uid]}
-            data[str(uid)] = combined
-            save_data(data)
-            del user_states[uid]
-            del user_temp[uid]
-            await context.bot.delete_message(update.effective_chat.id, msg_id)
-            await update.message.reply_text("✅ API disimpan. Ketik /start")
     else:
-        await update.message.reply_text("Gunakan tombol /start untuk mulai.")
+        await query.message.reply_text("❗ Belum hubungkan API")
 
-# === MAIN ===
-async def on_start(app):
-    logging.info("Gnuee Assistant Ready!")
+elif query.data == "stop":
+    active_auto[uid] = False
+    await query.message.reply_text("🛑 Auto trading dihentikan.")
 
-if __name__ == "__main__":
-    app = ApplicationBuilder().token(BOT_TOKEN).post_init(on_start).build()
+elif query.data == "manual":
+    keyboard = [[InlineKeyboardButton("🟢 BUY", callback_data="buy"), InlineKeyboardButton("🔴 SELL", callback_data="sell")]]
+    await query.message.reply_text("✋ Manual Mode:", reply_markup=InlineKeyboardMarkup(keyboard))
 
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CallbackQueryHandler(callback_handler))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+elif query.data in ["buy", "sell"]:
+    if not user:
+        await query.message.reply_text("❗ Belum hubungkan API")
+        return
+    result, pnl = entry_order(user, query.data)
+    await query.message.reply_text(result)
+    add_log(uid, user['pair'], pnl)
+    active_positions[uid] = {
+        "pair": user['pair'],
+        "side": query.data.upper(),
+        "margin": user['margin'],
+        "lev": user['leverage'],
+        "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    }
 
-    app.run_polling(close_loop=True)
+elif query.data == "posisi":
+    pos = active_positions.get(uid)
+    if not pos:
+        await query.message.reply_text("📭 Tidak ada posisi aktif.")
+    else:
+        await query.message.reply_text(
+            f"📈 Posisi Aktif:\n\n🟢 {pos['side']} {pos['pair']}\n💵 Margin: {pos['margin']} USDT | Leverage: {pos['lev']}x\n🕒 Masuk: {pos['time']}")
+
+elif query.data == "saldo":
+    if not user:
+        await query.message.reply_text("❗ Belum hubungkan API")
+        return
+    bal = get_balance(user)
+    if bal == -1:
+        await query.message.reply_text("⚠️ Gagal ambil saldo")
+    else:
+        await query.message.reply_text(f"💰 Saldo OKX: {bal} USDT")
+
+elif query.data == "log":
+    logs = user.get("log", []) if user else []
+    if not logs:
+        await query.message.reply_text("📜 Log kosong. Belum ada aktivitas trading.")
+    else:
+        await query.message.reply_text("📜 Riwayat Trading:\n\n" + "\n".join(logs))
+
+elif query.data == "settings":
+    if not user:
+        await query.message.reply_text("❗ Belum hubungkan API")
+        return
+    setting_msg = f"📈 Leverage: {user['leverage']}x\n💵 Margin: {user['margin']} USDT\n🎯 TP: {user['tp']}%\n🛡 SL: {user['sl']}%\n🔁 Trailing: {user['trailing']}%"
+    keyboard = [
+        [InlineKeyboardButton("Ubah Leverage", callback_data="set_lev"), InlineKeyboardButton("Ubah Margin", callback_data="set_margin")],
+        [InlineKeyboardButton("Ubah TP", callback_data="set_tp"), InlineKeyboardButton("Ubah SL", callback_data="set_sl")],
+        [InlineKeyboardButton("Ubah Trailing", callback_data="set_trail")],
+        [InlineKeyboardButton("<< Kembali", callback_data="menu")]
+    ]
+    await query.message.reply_text(setting_msg, reply_markup=InlineKeyboardMarkup(keyboard))
+
+elif query.data.startswith("set_"):
+    param = query.data.replace("set_", "")
+    user_states[uid] = f"update_{param}"
+    await query.message.reply_text(f"Kirim nilai baru untuk {param.upper()}: (hanya angka)")
+
+async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE): uid = update.effective_user.id txt = update.message.text.strip() msg_id = update.message.message_id
+
+if uid in user_states:
+    step = user_states[uid]
+    if step == "api":
+        user_temp[uid]["api_key"] = txt
+        user_states[uid] = "secret"
+        await context.bot.delete_message(update.effective_chat.id, msg_id)
+        await update.message.reply_text("🔐 Kirim API SECRET kamu:")
+    elif step == "secret":
+        user_temp[uid]["api_secret"] = txt
+        user_states[uid] = "pass"
+        await context.bot.delete_message(update.effective_chat.id, msg_id)
+        await update.message.reply_text("🧷 Kirim API PASSPHRASE kamu:")
+    elif step == "pass":
+        user_temp[uid]["passphrase"] = txt
+        data = load_data()
+        data[str(uid)] = user_temp[uid] | DEFAULT_SETTINGS
+        save_data(data)
+        del user_states[uid]
+        del user_temp[uid]
+        await context.bot.delete_message(update.effective_chat.id, msg_id)
+        await update.message.reply_text("✅ API disimpan. Ketik /start")
+    elif step.startswith("update_"):
+        param = step.replace("update_", "")
+        try:
+            val = float(txt)
+            data = load_data()
+            data[str(uid)][param] = val
+            save_data(data)
+            await update.message.reply_text(f"✅ {param.upper()} diupdate ke {val}")
+        except:
+            await update.message.reply_text("⚠️ Input tidak valid, kirim angka saja!")
+        del user_states[uid]
+else:
+    await update.message.reply_text("Gunakan tombol /start untuk mulai.")
+
+=== MAIN ===
+
+async def on_start(app): logging.info("Gnuee Assistant Ready!")
+
+if name == 'main': app = ApplicationBuilder().token(BOT_TOKEN).post_init(on_start).build() app.add_handler(CommandHandler("start", start)) app.add_handler(CallbackQueryHandler(callback_handler)) app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text)) app.run_polling(close_loop=True)
+
