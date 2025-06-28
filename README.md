@@ -24,8 +24,8 @@ Dibuat untuk real use-case dengan kontrol penuh via Telegram.
 okx-multibot/
 ├── main.py            # File utama bot Telegram
 ├── .env               # Token bot Telegram
-├── user_data.json     # Data API dan setting masing-masing user```
-
+├── user_data.json     # Data API dan setting masing-masing user
+```
 ⚙️ Cara Instalasi
 
 1. Update dan Install Dependensi
