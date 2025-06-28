@@ -26,13 +26,13 @@ okx-multibot/
 ├── .env               # Token bot Telegram
 ├── user_data.json     # Data API dan setting masing-masing user
 ```
-⚙️ Cara Instalasi
+#⚙️ Cara Instalasi#
 
 1. Update dan Install Dependensi
 ```bash
 sudo apt update && sudo apt install python3-pip -y
-pip install python-telegram-bot requests python-dotenv```
-
+pip install python-telegram-bot requests python-dotenv
+```
 2. Buat File .env
 ```bash
 nano .env
