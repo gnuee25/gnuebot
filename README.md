@@ -1,4 +1,4 @@
-# gnuebot
+## Gnue Assistant
 
 # 🚀 Gnuee Assistant - OKX Futures Trading Bot (Real Version)
 
