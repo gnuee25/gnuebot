@@ -1,5 +1,5 @@
 #=== Gnuee Assistant (OKX Trading Bot - Versi Real) ===
-# Semua fitur aktif dalam 1 file (Telegram + Trading)
+#Semua fitur aktif dalam 1 file (Telegram + Trading)
 
 import logging
 import os
