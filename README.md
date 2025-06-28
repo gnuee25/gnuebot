@@ -25,3 +25,49 @@ okx-multibot/
 ├── main.py            # File utama bot Telegram
 ├── .env               # Token bot Telegram
 ├── user_data.json     # Data API dan setting masing-masing user
+
+⚙️ Cara Instalasi
+
+1. Update dan Install Dependensi
+bash
+sudo apt update && sudo apt install python3-pip -y
+pip install python-telegram-bot requests python-dotenv
+
+2. Buat File .env
+
+nano .env
+
+Isi seperti berikut:
+
+BOT_TOKEN=isi_token_bot_telegram_kamu
+
+3. Jalankan Bot
+python3 main.py
+```
+
+---
+
+🤖 Menu Bot Telegram
+
+Tombol	Fungsi
+
+🔗 Hubungkan API	Input API Key OKX (key, secret, passphrase)
+🤖 Auto Mode	Jalankan trading otomatis
+✋ Manual Mode	Buy/Sell langsung via tombol
+⏹ Stop	Hentikan auto trading
+⚙️ Setting	(Segera) Atur TP/SL/Leverage/Margin
+💰 Saldo	Tampilkan saldo akun OKX
+📜 Log	Riwayat trade singkat
+
+
+
+---
+
+🛡 Keamanan
+
+Setiap user input API sendiri (multi-user)
+
+Pesan API langsung dihapus (tidak bocor)
+
+Tidak menyimpan credential sensitif secara terbuka
+
