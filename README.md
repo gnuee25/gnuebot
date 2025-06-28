@@ -24,24 +24,25 @@ Dibuat untuk real use-case dengan kontrol penuh via Telegram.
 okx-multibot/
 ├── main.py            # File utama bot Telegram
 ├── .env               # Token bot Telegram
-├── user_data.json     # Data API dan setting masing-masing user
+├── user_data.json     # Data API dan setting masing-masing user```
 
 ⚙️ Cara Instalasi
 
 1. Update dan Install Dependensi
-bash
+```bash
 sudo apt update && sudo apt install python3-pip -y
-pip install python-telegram-bot requests python-dotenv
+pip install python-telegram-bot requests python-dotenv```
 
 2. Buat File .env
-
+```bash
 nano .env
-
+```
 Isi seperti berikut:
-
+```bash
 BOT_TOKEN=isi_token_bot_telegram_kamu
-
+```
 3. Jalankan Bot
+```bash
 python3 main.py
 ```
 
