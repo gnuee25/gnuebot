@@ -48,18 +48,19 @@ python3 main.py
 
 ---
 
-🤖 Menu Bot Telegram
-
+## 🤖 Menu Bot Telegram
+```bash
 Tombol	Fungsi
 
 🔗 Hubungkan API	Input API Key OKX (key, secret, passphrase)
+
 🤖 Auto Mode	Jalankan trading otomatis
 ✋ Manual Mode	Buy/Sell langsung via tombol
 ⏹ Stop	Hentikan auto trading
 ⚙️ Setting	(Segera) Atur TP/SL/Leverage/Margin
 💰 Saldo	Tampilkan saldo akun OKX
 📜 Log	Riwayat trade singkat
-
+```
 
 
 ---
